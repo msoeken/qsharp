@@ -1,0 +1,13 @@
+[package]
+name = "qsharp-codegen"
+version = "0.1.0"
+authors = ["Mathias Soeken <mathias.soeken@outlook.com>"]
+license = "MIT"
+edition = "2018"
+
+[dependencies]
+itertools = "0.10.1"
+proc-macro2 = "1.0.29"
+quote = "1.0.9"
+qsharp-ast = { path = "../qsharp-ast/" }
+syn = "1.0.77"
