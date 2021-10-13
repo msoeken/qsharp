@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "qsharp",
+    "qsharp-ast",
+    "qsharp-codegen",
+    "qsharp-runtime"
+]

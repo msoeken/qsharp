@@ -1,0 +1,8 @@
+[package]
+name = "qsharp-runtime"
+version = "0.1.0"
+authors = ["Mathias Soeken <mathias.soeken@outlook.com>"]
+license = "MIT"
+edition = "2018"
+
+[dependencies]

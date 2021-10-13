@@ -1,0 +1,20 @@
+[package]
+name = "qsharp"
+version = "0.1.0"
+authors = ["Mathias Soeken <mathias.soeken@outlook.com>"]
+license = "MIT"
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0.75"
+quote = "1.0.9"
+proc-macro2 = "1.0.28"
+qsharp-ast = { path = "../qsharp-ast/" }
+qsharp-codegen = { path = "../qsharp-codegen/" }
+qsharp-runtime = { path = "../qsharp-runtime/" }
+
+[dev-dependencies]
+fixedbitset = "0.4.0"
