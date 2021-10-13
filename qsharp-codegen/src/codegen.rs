@@ -2,11 +2,14 @@ use std::{collections::HashMap, rc::Rc};
 
 use itertools::Itertools;
 use proc_macro2::Punct;
-use qsharp_ast::ast::{
-    Access, ArrayItemIndex, Callable, CallableBody, Expression, Namespace, NamespaceItem,
-    Parameter, Program, QualifiedName, QubitAllocationKind, QubitInitializer, ResultValue, Scope,
-    SpecializationGenerator, SpecializationKind, SpecializationParameter, Statement, SymbolBinding,
-    TypeKind, UpdateOperator,
+use qsharp_ast::{
+    analysis::type_from_expression,
+    ast::{
+        Access, ArrayItemIndex, Callable, CallableBody, Expression, Namespace, NamespaceItem,
+        Parameter, Program, QualifiedName, QubitAllocationKind, QubitInitializer, ResultValue,
+        Scope, SpecializationGenerator, SpecializationKind, SpecializationParameter, Statement,
+        SymbolBinding, TypeKind, UpdateOperator,
+    },
 };
 use quote::{format_ident, quote, TokenStreamExt};
 
@@ -21,7 +24,7 @@ use crate::{
 impl ToRust for QualifiedName {
     fn translate(
         &self,
-        _symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        _symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         match self.namespace() {
             Some(namespace) => {
@@ -47,7 +50,7 @@ impl ToRust for QualifiedName {
 impl ToRust for ArrayItemIndex {
     fn translate(
         &self,
-        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         match self {
             ArrayItemIndex::Simple(expr) => {
@@ -62,7 +65,7 @@ impl ToRust for ArrayItemIndex {
 impl ToRust for Callable {
     fn translate(
         &self,
-        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         // TODO incomplete!
 
@@ -175,7 +178,7 @@ impl ToRust for Callable {
 impl ToRust for CallableBody {
     fn translate(
         &self,
-        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         match self {
             CallableBody::Simple(scope) => scope.translate(symbol_table),
@@ -186,7 +189,7 @@ impl ToRust for CallableBody {
 
 fn expression_to_rust(
     expr: &Expression,
-    symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     is_adjoint: bool,
     controlled: usize,
 ) -> proc_macro2::TokenStream {
@@ -252,6 +255,11 @@ fn expression_to_rust(
         }
         Expression::Controlled(expr) => {
             expression_to_rust(expr, symbol_table, is_adjoint, controlled + 1)
+        }
+        Expression::Range(lhs, rhs) => {
+            let lhs = lhs.translate(symbol_table);
+            let rhs = rhs.translate(symbol_table);
+            quote! { (#lhs..=#rhs) }
         }
         Expression::Equality(lhs, rhs) => {
             let lhs = lhs.translate(symbol_table);
@@ -336,7 +344,7 @@ fn expression_to_rust(
 impl ToRust for Expression {
     fn translate(
         &self,
-        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         expression_to_rust(self, symbol_table, false, 0)
     }
@@ -345,7 +353,7 @@ impl ToRust for Expression {
 impl ToRust for Namespace {
     fn translate(
         &self,
-        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         let name = self.name().translate(symbol_table);
         let items = self.items().iter().map(|item| item.translate(symbol_table));
@@ -366,7 +374,7 @@ impl ToRust for Namespace {
 impl ToRust for NamespaceItem {
     fn translate(
         &self,
-        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         match self {
             NamespaceItem::OpenDirective(name, alias) => {
@@ -391,7 +399,7 @@ fn generate_parameters_directly(parameter: &Rc<Parameter>) -> proc_macro2::Token
 impl ToRust for Parameter {
     fn translate(
         &self,
-        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         match self {
             Parameter::Item(name, kind) => {
@@ -415,7 +423,7 @@ impl ToRust for Parameter {
 impl ToRust for Program {
     fn translate(
         &self,
-        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         let namespaces = self
             .namespaces()
@@ -431,7 +439,7 @@ impl ToRust for Program {
 impl ToRust for Scope {
     fn translate(
         &self,
-        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         let statements = self
             .statements()
@@ -450,7 +458,7 @@ impl ToRust for Scope {
 impl ToRust for Statement {
     fn translate(
         &self,
-        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         match self {
             Statement::Let(binding, expr) => {
@@ -553,12 +561,19 @@ impl ToRust for Statement {
                 code
             }
             Statement::For(binding, expr, scope) => {
+                let expr_type = type_from_expression(expr, symbol_table)
+                    .expect("cannot determine type of expr in for-loop");
+
                 // TODO for now we assume that expr is array
                 let binding = binding.translate(symbol_table);
                 let expr = expr.translate(symbol_table);
                 let scope = scope.translate(symbol_table);
 
-                quote! { for #binding in #expr.iter() #scope }
+                match expr_type.as_ref() {
+                    TypeKind::Array(_) => quote! { for #binding in #expr.iter() #scope },
+                    TypeKind::Range => quote! { for #binding in #expr #scope },
+                    _ => panic!("unsupported type of expr in for-loop"),
+                }
             }
             Statement::WithinApply(within_scope, apply_scope) => {
                 let within_scope_pre = within_scope.translate(symbol_table);
@@ -579,7 +594,7 @@ impl ToRust for Statement {
 impl ToRust for SymbolBinding {
     fn translate(
         &self,
-        _symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        _symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         match self {
             SymbolBinding::Discard => quote! { _ },
@@ -595,7 +610,7 @@ impl ToRust for SymbolBinding {
 impl ToRust for TypeKind {
     fn translate(
         &self,
-        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+        symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
     ) -> proc_macro2::TokenStream {
         match self {
             TypeKind::BigInt => todo!(),
@@ -604,7 +619,7 @@ impl ToRust for TypeKind {
             TypeKind::Int => quote! { i64 },
             TypeKind::Pauli => quote! { u8 },
             TypeKind::Qubit => quote! { usize },
-            TypeKind::Range => todo!(),
+            TypeKind::Range => quote! { std::ops::Range<i64> },
             TypeKind::Result => quote! { bool },
             TypeKind::String => quote! { String },
             TypeKind::Unit => quote! { () },

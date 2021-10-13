@@ -48,7 +48,15 @@ fn test_array() {
 
             function Sum(numbers: Int[]) : Int {
                 mutable sum = 0;
-                for number in numbers {
+                for number in [1, 2, 3, 4] {
+                    set sum += number;
+                }
+                return sum;
+            }
+
+            function RangeSum() : Int {
+                mutable sum = 0;
+                for number in 1..4 {
                     set sum += number;
                 }
                 return sum;
@@ -61,4 +69,5 @@ fn test_array() {
     assert!((Array::Function(&mut sim, 1) - 4.56).abs() < f64::EPSILON);
     assert!((Array::Function(&mut sim, 2) - 7.89).abs() < f64::EPSILON);
     assert_eq!(Array::Sum(&mut sim, Rc::new(vec![1, 2, 3, 4])), 10);
+    assert_eq!(Array::RangeSum(&mut sim), 10);
 }

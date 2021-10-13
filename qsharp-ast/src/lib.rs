@@ -37,9 +37,11 @@
 //! # Ok::<(), syn::parse::Error>(())
 //! ```
 
-pub(crate) mod analysis {
-    pub mod expression;
-    pub mod normalize;
+pub mod analysis {
+    mod expression;
+    pub(crate) mod normalize;
+
+    pub use expression::type_from_expression;
 }
 
 /// Contains all AST data structures, which implement the [`syn::parse::Parse`] trait.
