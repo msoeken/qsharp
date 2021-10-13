@@ -121,7 +121,11 @@ pub fn type_from_expression(
             Characteristics::ctl(),
         ),
 
-        Expression::Range(_lhs, _rhs) => Some(TypeKind::range()),
+        Expression::Range(lhs, rhs) => {
+            with_type_check(type_from_expression(lhs, symbol_table), &TypeKind::int())?;
+            with_type_check(type_from_expression(rhs, symbol_table), &TypeKind::int())?;
+            Some(TypeKind::range())
+        }
         Expression::LogicalOr(lhs, rhs) | Expression::LogicalAnd(lhs, rhs) => {
             let lhs = type_from_expression(lhs, symbol_table);
             let rhs = type_from_expression(rhs, symbol_table);

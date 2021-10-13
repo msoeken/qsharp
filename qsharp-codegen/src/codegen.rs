@@ -62,6 +62,22 @@ impl ToRust for ArrayItemIndex {
     }
 }
 
+fn add_parameter_to_symbol_table(
+    parameter: &Parameter,
+    symbol_table: &mut HashMap<QualifiedName, Rc<TypeKind>>,
+) {
+    match parameter {
+        Parameter::Item(name, kind) => {
+            symbol_table.insert(QualifiedName::simple(name), kind.clone());
+        }
+        Parameter::Tuple(params) => {
+            for param in params {
+                add_parameter_to_symbol_table(param, symbol_table);
+            }
+        }
+    }
+}
+
 impl ToRust for Callable {
     fn translate(
         &self,
@@ -85,6 +101,8 @@ impl ToRust for Callable {
             Access::Default => quote! { pub },
         };
         let parameters = self.parameters().translate(symbol_table);
+
+        add_parameter_to_symbol_table(self.parameters(), symbol_table);
 
         if let CallableBody::Multiple(specializations) = self.body() {
             let mut code = quote! {};
