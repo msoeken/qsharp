@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use proc_macro2::{Group, Punct, TokenStream};
 use qsharp_ast::ast::{Parameter, TypeKind};
@@ -35,7 +35,9 @@ impl ToTokensOne for String {
 
 impl<T: ToRust> ToTokensOne for Rc<T> {
     fn to_tokens_one(&self, tokens: &mut proc_macro2::TokenStream) {
-        tokens.extend(self.to_rust());
+        // TODO
+        let mut map = HashMap::new();
+        tokens.extend(self.translate(&mut map));
     }
 }
 

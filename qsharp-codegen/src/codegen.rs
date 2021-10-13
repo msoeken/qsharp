@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use itertools::Itertools;
 use proc_macro2::Punct;
@@ -6,7 +6,7 @@ use qsharp_ast::ast::{
     Access, ArrayItemIndex, Callable, CallableBody, Expression, Namespace, NamespaceItem,
     Parameter, Program, QualifiedName, QubitAllocationKind, QubitInitializer, ResultValue, Scope,
     SpecializationGenerator, SpecializationKind, SpecializationParameter, Statement, SymbolBinding,
-    TypeKind,
+    TypeKind, UpdateOperator,
 };
 use quote::{format_ident, quote, TokenStreamExt};
 
@@ -19,7 +19,10 @@ use crate::{
 };
 
 impl ToRust for QualifiedName {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
+    fn translate(
+        &self,
+        _symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
         match self.namespace() {
             Some(namespace) => {
                 let mut tokenstream = proc_macro2::TokenStream::new();
@@ -42,10 +45,13 @@ impl ToRust for QualifiedName {
 }
 
 impl ToRust for ArrayItemIndex {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
+    fn translate(
+        &self,
+        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
         match self {
             ArrayItemIndex::Simple(expr) => {
-                let expr = expr.to_rust();
+                let expr = expr.translate(symbol_table);
                 quote! { #expr as usize }
             }
             _ => todo!(),
@@ -54,7 +60,10 @@ impl ToRust for ArrayItemIndex {
 }
 
 impl ToRust for Callable {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
+    fn translate(
+        &self,
+        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
         // TODO incomplete!
 
         // at this point we ignore self.characteristics() and assume that it has
@@ -67,12 +76,12 @@ impl ToRust for Callable {
         }
 
         let prefix = self.prefix();
-        let return_type = self.return_type().to_rust();
+        let return_type = self.return_type().translate(symbol_table);
         let modifier = match prefix.access() {
             Access::Internal => quote! {},
             Access::Default => quote! { pub },
         };
-        let parameters = self.parameters().to_rust();
+        let parameters = self.parameters().translate(symbol_table);
 
         if let CallableBody::Multiple(specializations) = self.body() {
             let mut code = quote! {};
@@ -82,7 +91,7 @@ impl ToRust for Callable {
                     match specialization.kind() {
                         SpecializationKind::Body => {
                             let name = format_ident!("{}", self.name());
-                            let body = scope.to_rust();
+                            let body = scope.translate(symbol_table);
 
                             code = quote! {
                                 #code
@@ -91,7 +100,7 @@ impl ToRust for Callable {
                         }
                         SpecializationKind::Adjoint => {
                             let name = format_ident!("{}_adj", self.name());
-                            let body = scope.to_rust();
+                            let body = scope.translate(symbol_table);
 
                             code = quote! {
                                 #code
@@ -111,8 +120,9 @@ impl ToRust for Callable {
                             };
 
                             let name = format_ident!("{}_ctl", self.name());
-                            let body = scope.to_rust();
-                            let qubit_array_type = TypeKind::array(TypeKind::qubit()).to_rust();
+                            let body = scope.translate(symbol_table);
+                            let qubit_array_type =
+                                TypeKind::array(TypeKind::qubit()).translate(symbol_table);
                             let parameters = generate_parameters_directly(self.parameters());
 
                             code = quote! {
@@ -133,8 +143,9 @@ impl ToRust for Callable {
                             };
 
                             let name = format_ident!("{}_ctl_adj", self.name());
-                            let body = scope.to_rust();
-                            let qubit_array_type = TypeKind::array(TypeKind::qubit()).to_rust();
+                            let body = scope.translate(symbol_table);
+                            let qubit_array_type =
+                                TypeKind::array(TypeKind::qubit()).translate(symbol_table);
                             let parameters = generate_parameters_directly(self.parameters());
 
                             code = quote! {
@@ -152,7 +163,7 @@ impl ToRust for Callable {
         } else {
             // TODO this should be unreachable after semantic analysis is complete
             let name = format_ident!("{}", self.name());
-            let body = self.body().to_rust();
+            let body = self.body().translate(symbol_table);
 
             quote! {
                 #modifier fn #name(#parameters) -> #return_type #body
@@ -162,9 +173,12 @@ impl ToRust for Callable {
 }
 
 impl ToRust for CallableBody {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
+    fn translate(
+        &self,
+        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
         match self {
-            CallableBody::Simple(scope) => scope.to_rust(),
+            CallableBody::Simple(scope) => scope.translate(symbol_table),
             _ => todo!(),
         }
     }
@@ -172,6 +186,7 @@ impl ToRust for CallableBody {
 
 fn expression_to_rust(
     expr: &Expression,
+    symbol_table: &mut HashMap<String, Rc<TypeKind>>,
     is_adjoint: bool,
     controlled: usize,
 ) -> proc_macro2::TokenStream {
@@ -191,7 +206,7 @@ fn expression_to_rust(
 
             // TODO check that these type_parameters are from a callable (to inject Sim)
             if let Some(type_parameters) = type_parameters {
-                let types = type_parameters.iter().map(|t| t.to_rust());
+                let types = type_parameters.iter().map(|t| t.translate(symbol_table));
                 quote! { #name::<Sim, #(#types),*> }
             } else {
                 quote! { #name }
@@ -209,90 +224,94 @@ fn expression_to_rust(
             }
         }
         Expression::ArrayLiteral(exprs) => {
-            let exprs = exprs.iter().map(|expr| expr.to_rust());
+            let exprs = exprs.iter().map(|expr| expr.translate(symbol_table));
             quote! { std::rc::Rc::new(vec![#(#exprs),*]) }
         }
         Expression::TupleLiteral(exprs) => {
-            let exprs = exprs.iter().map(|expr| expr.to_rust());
+            let exprs = exprs.iter().map(|expr| expr.translate(symbol_table));
             quote! { (#(#exprs),*) }
         }
         Expression::PosPrefix(expr) => {
-            let expr = expr.to_rust();
+            let expr = expr.translate(symbol_table);
             quote! { +(#expr) }
         }
         Expression::NegPrefix(expr) => {
-            let expr = expr.to_rust();
+            let expr = expr.translate(symbol_table);
             quote! { -(#expr) }
         }
         Expression::LogicalNot(expr) => {
-            let expr = expr.to_rust();
+            let expr = expr.translate(symbol_table);
             quote! { !(#expr) }
         }
         Expression::BitwiseNot(expr) => {
-            let expr = expr.to_rust();
+            let expr = expr.translate(symbol_table);
             quote! { ~(#expr) }
         }
-        Expression::Adjoint(expr) => expression_to_rust(expr, !is_adjoint, controlled),
-        Expression::Controlled(expr) => expression_to_rust(expr, is_adjoint, controlled + 1),
+        Expression::Adjoint(expr) => {
+            expression_to_rust(expr, symbol_table, !is_adjoint, controlled)
+        }
+        Expression::Controlled(expr) => {
+            expression_to_rust(expr, symbol_table, is_adjoint, controlled + 1)
+        }
         Expression::Equality(lhs, rhs) => {
-            let lhs = lhs.to_rust();
-            let rhs = rhs.to_rust();
+            let lhs = lhs.translate(symbol_table);
+            let rhs = rhs.translate(symbol_table);
             quote! { (#lhs == #rhs) }
         }
         Expression::Inequality(lhs, rhs) => {
-            let lhs = lhs.to_rust();
-            let rhs = rhs.to_rust();
+            let lhs = lhs.translate(symbol_table);
+            let rhs = rhs.translate(symbol_table);
             quote! { (#lhs != #rhs) }
         }
         Expression::LessThan(lhs, rhs) => {
-            let lhs = lhs.to_rust();
-            let rhs = rhs.to_rust();
+            let lhs = lhs.translate(symbol_table);
+            let rhs = rhs.translate(symbol_table);
             quote! { (#lhs < #rhs) }
         }
         Expression::LessThanOrEqual(lhs, rhs) => {
-            let lhs = lhs.to_rust();
-            let rhs = rhs.to_rust();
+            let lhs = lhs.translate(symbol_table);
+            let rhs = rhs.translate(symbol_table);
             quote! { (#lhs <= #rhs) }
         }
         Expression::GreaterThan(lhs, rhs) => {
-            let lhs = lhs.to_rust();
-            let rhs = rhs.to_rust();
+            let lhs = lhs.translate(symbol_table);
+            let rhs = rhs.translate(symbol_table);
             quote! { (#lhs > #rhs) }
         }
         Expression::GreaterThanOrEqual(lhs, rhs) => {
-            let lhs = lhs.to_rust();
-            let rhs = rhs.to_rust();
+            let lhs = lhs.translate(symbol_table);
+            let rhs = rhs.translate(symbol_table);
             quote! { (#lhs >= #rhs) }
         }
         Expression::RightShift(lhs, rhs) => {
-            let lhs = lhs.to_rust();
-            let rhs = rhs.to_rust();
+            let lhs = lhs.translate(symbol_table);
+            let rhs = rhs.translate(symbol_table);
             quote! { (#lhs >> #rhs) }
         }
         Expression::LeftShift(lhs, rhs) => {
-            let lhs = lhs.to_rust();
-            let rhs = rhs.to_rust();
+            let lhs = lhs.translate(symbol_table);
+            let rhs = rhs.translate(symbol_table);
             quote! { (#lhs << #rhs) }
         }
         Expression::Addition(lhs, rhs) => {
-            let lhs = lhs.to_rust();
-            let rhs = rhs.to_rust();
+            let lhs = lhs.translate(symbol_table);
+            let rhs = rhs.translate(symbol_table);
             quote! { (#lhs + #rhs) }
         }
         Expression::Subtraction(lhs, rhs) => {
-            let lhs = lhs.to_rust();
-            let rhs = rhs.to_rust();
+            let lhs = lhs.translate(symbol_table);
+            let rhs = rhs.translate(symbol_table);
             quote! { (#lhs - #rhs) }
         }
         Expression::Call(caller, args) => {
-            let caller = expression_to_rust(caller, is_adjoint, controlled);
+            let caller = expression_to_rust(caller, symbol_table, is_adjoint, controlled);
 
             let mut arg_inits = vec![];
             let mut arg_names = vec![];
 
             for (idx, arg) in args.iter().enumerate() {
                 let arg_name = format_ident!("__arg__{}", idx);
-                let arg = arg.to_rust();
+                let arg = arg.translate(symbol_table);
                 arg_inits.push(quote! { let #arg_name = #arg.clone(); });
                 arg_names.push(arg_name);
             }
@@ -305,8 +324,8 @@ fn expression_to_rust(
             }
         }
         Expression::ArrayItem(expr, index) => {
-            let expr = expr.to_rust();
-            let index = index.to_rust();
+            let expr = expr.translate(symbol_table);
+            let index = index.translate(symbol_table);
 
             quote! { #expr[#index] }
         }
@@ -315,15 +334,21 @@ fn expression_to_rust(
 }
 
 impl ToRust for Expression {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
-        expression_to_rust(self, false, 0)
+    fn translate(
+        &self,
+        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
+        expression_to_rust(self, symbol_table, false, 0)
     }
 }
 
 impl ToRust for Namespace {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
-        let name = self.name().to_rust();
-        let items = self.items().iter().map(|item| item.to_rust());
+    fn translate(
+        &self,
+        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
+        let name = self.name().translate(symbol_table);
+        let items = self.items().iter().map(|item| item.translate(symbol_table));
 
         quote! {
             #[allow(non_snake_case, unused_variables, dead_code, clippy::clone_on_copy, clippy::redundant_clone, clippy::unused_unit)]
@@ -339,17 +364,20 @@ impl ToRust for Namespace {
 }
 
 impl ToRust for NamespaceItem {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
+    fn translate(
+        &self,
+        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
         match self {
             NamespaceItem::OpenDirective(name, alias) => {
                 // TODO
                 assert!(alias.is_none());
 
-                let name = name.to_rust();
+                let name = name.translate(symbol_table);
 
                 quote! { use #name::*; }
             }
-            NamespaceItem::Callable(callable) => callable.to_rust(),
+            NamespaceItem::Callable(callable) => callable.translate(symbol_table),
             _ => todo!(),
         }
     }
@@ -361,11 +389,14 @@ fn generate_parameters_directly(parameter: &Rc<Parameter>) -> proc_macro2::Token
 }
 
 impl ToRust for Parameter {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
+    fn translate(
+        &self,
+        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
         match self {
             Parameter::Item(name, kind) => {
                 let name = format_ident!("{}", name);
-                let kind = kind.to_rust();
+                let kind = kind.translate(symbol_table);
                 quote! { #name: #kind }
             }
             Parameter::Tuple(items) => {
@@ -382,8 +413,14 @@ impl ToRust for Parameter {
 }
 
 impl ToRust for Program {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
-        let namespaces = self.namespaces().iter().map(|ns| ns.to_rust());
+    fn translate(
+        &self,
+        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
+        let namespaces = self
+            .namespaces()
+            .iter()
+            .map(|ns| ns.translate(symbol_table));
 
         quote! {
             #(#namespaces)*
@@ -392,11 +429,14 @@ impl ToRust for Program {
 }
 
 impl ToRust for Scope {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
+    fn translate(
+        &self,
+        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
         let statements = self
             .statements()
             .iter()
-            .map(|stmt| stmt.to_rust())
+            .map(|stmt| stmt.translate(symbol_table))
             .collect_vec();
 
         quote! {
@@ -408,20 +448,33 @@ impl ToRust for Scope {
 }
 
 impl ToRust for Statement {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
+    fn translate(
+        &self,
+        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
         match self {
             Statement::Let(binding, expr) => {
-                let binding = binding.to_rust();
-                let expr = expr.to_rust();
+                let binding = binding.translate(symbol_table);
+                let expr = expr.translate(symbol_table);
                 quote! { let #binding = #expr; }
             }
             Statement::Return(expr) => {
-                let expr = expr.to_rust();
+                let expr = expr.translate(symbol_table);
                 quote! { return #expr; }
             }
             Statement::Expression(expr) => {
-                let expr = expr.to_rust();
+                let expr = expr.translate(symbol_table);
                 quote! { #expr; }
+            }
+            Statement::Mutable(binding, expr) => {
+                let binding = binding.translate(symbol_table);
+                let expr = expr.translate(symbol_table);
+                quote! { let mut #binding = #expr; }
+            }
+            Statement::Update(name, UpdateOperator::Addition, expr) => {
+                let name = format_ident!("{}", name);
+                let expr = expr.translate(symbol_table);
+                quote! { #name += #expr; }
             }
             Statement::QubitAllocation(
                 QubitAllocationKind::Use,
@@ -431,33 +484,29 @@ impl ToRust for Statement {
             ) => {
                 let flattened = flatten_bindings(binding, initializer);
 
-                let allocate = flattened.iter().map(|(name, init)| {
+                let mut allocate = vec![];
+                let mut release = vec![];
+                for (name, init) in flattened {
                     let ident = format_ident!("{}", name);
                     match init {
-                        QubitInitializer::Single => quote! { let #ident = sim__.allocate(); },
+                        QubitInitializer::Single => {
+                            allocate.push(quote! { let #ident = sim__.allocate(); });
+                            release.push(quote! { sim__.release(#ident); });
+                        }
                         QubitInitializer::Register(expr) => {
-                            let expr = expr.to_rust();
-                            quote! { let #ident = sim__.allocate_many(#expr as usize); }
+                            let expr = expr.translate(symbol_table);
+                            allocate
+                                .push(quote! { let #ident = sim__.allocate_many(#expr as usize); });
+                            release.push(quote! { sim__.release_many(#ident); });
                         }
                         _ => unreachable!(),
                     }
-                });
+                }
 
-                let release = flattened.iter().map(|(name, init)| {
-                    let ident = format_ident!("{}", name);
-                    match init {
-                        QubitInitializer::Single => quote! { sim__.release(#ident); },
-                        QubitInitializer::Register(_) => quote! { sim__.release_many(#ident); },
-
-                        _ => unreachable!(),
-                    }
-                });
-
-                let statements = scope
-                    .statements()
-                    .iter()
-                    .map(|stmt| stmt.to_rust())
-                    .collect_vec();
+                let mut statements = vec![];
+                for stmt in scope.statements() {
+                    statements.push(stmt.translate(symbol_table));
+                }
 
                 quote! {
                     {
@@ -471,8 +520,8 @@ impl ToRust for Statement {
                 let mut code = quote! {};
 
                 let (condition, scope) = &ifs[0];
-                let condition = condition.to_rust();
-                let scope = scope.to_rust();
+                let condition = condition.translate(symbol_table);
+                let scope = scope.translate(symbol_table);
 
                 code = quote! {
                     #code
@@ -481,8 +530,8 @@ impl ToRust for Statement {
                 };
 
                 for (condition, scope) in ifs.iter().skip(1) {
-                    let condition = condition.to_rust();
-                    let scope = scope.to_rust();
+                    let condition = condition.translate(symbol_table);
+                    let scope = scope.translate(symbol_table);
 
                     code = quote! {
                         #code
@@ -492,7 +541,7 @@ impl ToRust for Statement {
                 }
 
                 if let Some(scope) = default {
-                    let scope = scope.to_rust();
+                    let scope = scope.translate(symbol_table);
 
                     code = quote! {
                         #code
@@ -503,10 +552,18 @@ impl ToRust for Statement {
 
                 code
             }
+            Statement::For(binding, expr, scope) => {
+                // TODO for now we assume that expr is array
+                let binding = binding.translate(symbol_table);
+                let expr = expr.translate(symbol_table);
+                let scope = scope.translate(symbol_table);
+
+                quote! { for #binding in #expr.iter() #scope }
+            }
             Statement::WithinApply(within_scope, apply_scope) => {
-                let within_scope_pre = within_scope.to_rust();
-                let apply_scope = apply_scope.to_rust();
-                let within_scope_post = within_scope.clone().adjoint().to_rust();
+                let within_scope_pre = within_scope.translate(symbol_table);
+                let apply_scope = apply_scope.translate(symbol_table);
+                let within_scope_post = within_scope.clone().adjoint().translate(symbol_table);
 
                 quote! {
                     #within_scope_pre
@@ -520,7 +577,10 @@ impl ToRust for Statement {
 }
 
 impl ToRust for SymbolBinding {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
+    fn translate(
+        &self,
+        _symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
         match self {
             SymbolBinding::Discard => quote! { _ },
             SymbolBinding::Identifier(name) => {
@@ -533,7 +593,10 @@ impl ToRust for SymbolBinding {
 }
 
 impl ToRust for TypeKind {
-    fn to_rust(&self) -> proc_macro2::TokenStream {
+    fn translate(
+        &self,
+        symbol_table: &mut HashMap<String, Rc<TypeKind>>,
+    ) -> proc_macro2::TokenStream {
         match self {
             TypeKind::BigInt => todo!(),
             TypeKind::Bool => quote! { bool },
@@ -546,7 +609,7 @@ impl ToRust for TypeKind {
             TypeKind::String => quote! { String },
             TypeKind::Unit => quote! { () },
             TypeKind::Array(elem) => {
-                let elem = elem.to_rust();
+                let elem = elem.translate(symbol_table);
                 quote! { std::rc::Rc<Vec<#elem>> }
             }
             _ => todo!(),
@@ -566,11 +629,16 @@ mod tests {
 
     #[test]
     fn test_binary_operations() -> Result<()> {
+        let mut map = HashMap::new();
+
         assert_eq!(
-            parse_expression("1 + 3")?.to_rust().to_string(),
+            parse_expression("1 + 3")?.translate(&mut map).to_string(),
             "(1i64 + 3i64)"
         );
-        assert_eq!(parse_expression("a - b")?.to_rust().to_string(), "(a - b)");
+        assert_eq!(
+            parse_expression("a - b")?.translate(&mut map).to_string(),
+            "(a - b)"
+        );
 
         Ok(())
     }
