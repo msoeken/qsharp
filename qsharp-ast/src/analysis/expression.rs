@@ -53,8 +53,7 @@ fn augment_callable_type_kind(
     }
 }
 
-#[allow(dead_code)]
-pub(crate) fn type_from_expression(
+pub fn type_from_expression(
     expr: &Expression,
     symbol_table: &HashMap<QualifiedName, Rc<TypeKind>>,
 ) -> Option<Rc<TypeKind>> {
@@ -70,14 +69,16 @@ pub(crate) fn type_from_expression(
         Expression::PauliLiteral(_) => Some(TypeKind::pauli()),
         Expression::ResultLiteral(_) => Some(TypeKind::result()),
         Expression::ArrayLiteral(items) => {
-            let first = items.first()?;
+            let first = type_from_expression(items.first()?, symbol_table)?;
 
             // all items must be of the same type
-            if items.iter().skip(1).any(|expr| expr != first) {
-                return None;
+            for expr in items.iter().skip(1) {
+                if type_from_expression(expr, symbol_table)? != first {
+                    return None;
+                }
             }
 
-            Some(TypeKind::array(type_from_expression(first, symbol_table)?))
+            Some(TypeKind::array(first))
         }
         Expression::SizedArrayLiteral(item, size) => {
             with_type_check(type_from_expression(size, symbol_table), &TypeKind::int())?;
@@ -120,7 +121,11 @@ pub(crate) fn type_from_expression(
             Characteristics::ctl(),
         ),
 
-        Expression::Range(_lhs, _rhs) => todo!(),
+        Expression::Range(lhs, rhs) => {
+            with_type_check(type_from_expression(lhs, symbol_table), &TypeKind::int())?;
+            with_type_check(type_from_expression(rhs, symbol_table), &TypeKind::int())?;
+            Some(TypeKind::range())
+        }
         Expression::LogicalOr(lhs, rhs) | Expression::LogicalAnd(lhs, rhs) => {
             let lhs = type_from_expression(lhs, symbol_table);
             let rhs = type_from_expression(rhs, symbol_table);
@@ -190,7 +195,10 @@ pub(crate) fn type_from_expression(
                 _ => None,
             }
         }
-
-        _ => todo!(),
+        Expression::Call(..) => {
+            // TODO: cannot determine types of call expressions yet
+            None
+        }
+        _ => todo!("cannot determine type from expression: {:?}", expr),
     }
 }

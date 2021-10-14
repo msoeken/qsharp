@@ -37,9 +37,11 @@
 //! # Ok::<(), syn::parse::Error>(())
 //! ```
 
-pub(crate) mod analysis {
-    pub mod expression;
-    pub mod normalize;
+pub mod analysis {
+    mod expression;
+    pub(crate) mod normalize;
+
+    pub use expression::type_from_expression;
 }
 
 /// Contains all AST data structures, which implement the [`syn::parse::Parse`] trait.
@@ -64,7 +66,7 @@ pub mod ast {
     mod type_parameters;
     mod utilities;
 
-    pub use callable::{Callable, CallableBody};
+    pub use callable::{Callable, CallableBody, CallableKind};
     pub use characteristics::Characteristics;
     pub use declaration_prefix::{Access, DeclarationPrefix};
     pub use expression::{ArrayItemIndex, Expression, Pauli, ResultValue};
@@ -85,4 +87,4 @@ pub mod ast {
     pub use type_parameters::TypeParameters;
 }
 
-pub(crate) mod utilities;
+pub mod utilities;
