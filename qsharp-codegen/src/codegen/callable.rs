@@ -39,6 +39,7 @@ pub(crate) fn visit_callable(
 
     let code = if let CallableBody::Multiple(specializations) = callable.body() {
         let mut code = quote! {};
+        let sim_trait = format_ident!("{}", mapper.sim_trait);
 
         for specialization in specializations {
             if let SpecializationGenerator::Provided(args, scope) = specialization.generator() {
@@ -49,7 +50,7 @@ pub(crate) fn visit_callable(
 
                         code = quote! {
                             #code
-                            #modifier fn #name<Sim: QSharpIntrinsics>(sim__: &mut Sim, #parameters) -> #return_type #body
+                            #modifier fn #name<Sim: #sim_trait>(sim__: &mut Sim, #parameters) -> #return_type #body
                         }
                     }
                     SpecializationKind::Adjoint => {
@@ -58,7 +59,7 @@ pub(crate) fn visit_callable(
 
                         code = quote! {
                             #code
-                            #modifier fn #name<Sim: QSharpIntrinsics>(sim__: &mut Sim, #parameters) -> #return_type #body
+                            #modifier fn #name<Sim: #sim_trait>(sim__: &mut Sim, #parameters) -> #return_type #body
                         }
                     }
                     SpecializationKind::Controlled => {
@@ -82,7 +83,7 @@ pub(crate) fn visit_callable(
 
                         code = quote! {
                             #code
-                            #modifier fn #name<Sim: QSharpIntrinsics>(sim__: &mut Sim, #ctls_name: #qubit_array_type, #parameters) -> #return_type #body
+                            #modifier fn #name<Sim: #sim_trait>(sim__: &mut Sim, #ctls_name: #qubit_array_type, #parameters) -> #return_type #body
                         }
                     }
                     SpecializationKind::ControlledAdjoint => {
@@ -106,7 +107,7 @@ pub(crate) fn visit_callable(
 
                         code = quote! {
                             #code
-                            #modifier fn #name<Sim: QSharpIntrinsics>(sim__: &mut Sim, #ctls_name: #qubit_array_type, #parameters) -> #return_type #body
+                            #modifier fn #name<Sim: #sim_trait>(sim__: &mut Sim, #ctls_name: #qubit_array_type, #parameters) -> #return_type #body
                         }
                     }
                 }

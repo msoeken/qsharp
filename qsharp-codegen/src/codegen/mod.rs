@@ -17,15 +17,29 @@ mod callable;
 mod expression;
 mod symbol_binding;
 
-#[derive(Default)]
-pub(crate) struct Codegen {
+pub struct Codegen {
     symbol_table: HashMap<QualifiedName, Rc<TypeKind>>,
     scope_variables: Vec<Vec<QualifiedName>>,
+    sim_trait: String,
+}
+
+impl Default for Codegen {
+    fn default() -> Self {
+        Self {
+            symbol_table: Default::default(),
+            scope_variables: Default::default(),
+            sim_trait: String::from("QSharpIntrinsics"),
+        }
+    }
 }
 
 impl Codegen {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn set_sim_trait(&mut self, sim_trait: &str) {
+        self.sim_trait = sim_trait.to_string();
     }
 
     fn add_parameter_to_symbol_table(&mut self, parameter: &Parameter) {
