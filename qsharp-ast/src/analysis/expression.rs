@@ -195,6 +195,10 @@ pub fn type_from_expression(
                 _ => None,
             }
         }
-        _ => todo!(),
+        Expression::Call(..) => {
+            // TODO: cannot determine types of call expressions yet
+            None
+        }
+        _ => todo!("cannot determine type from expression: {:?}", expr),
     }
 }

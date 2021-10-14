@@ -7,7 +7,7 @@ use syn::{
 use crate::ast::Ident;
 
 /// A Q# qualified name (e.g., `Microsoft.Quantum.Intrinsic.X` or simply `CNOT`)
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct QualifiedName {
     namespace: Option<Vec<String>>,
     name: String,

@@ -4,7 +4,7 @@ use proc_macro2::Punct;
 use qsharp_ast::{
     analysis::type_from_expression,
     ast::{
-        ArrayItemIndex, Callable, Expression, Parameter, QualifiedName, QubitInitializer,
+        ArrayItemIndex, Callable, Expression, Parameter, QualifiedName, QubitInitializer, Scope,
         SymbolBinding, TypeKind, UpdateOperator,
     },
     utilities::Mapper,
@@ -20,6 +20,7 @@ mod symbol_binding;
 #[derive(Default)]
 pub(crate) struct Codegen {
     symbol_table: HashMap<QualifiedName, Rc<TypeKind>>,
+    scope_variables: Vec<Vec<QualifiedName>>,
 }
 
 impl Codegen {
@@ -30,13 +31,31 @@ impl Codegen {
     fn add_parameter_to_symbol_table(&mut self, parameter: &Parameter) {
         match parameter {
             Parameter::Item(name, kind) => {
-                self.symbol_table
-                    .insert(QualifiedName::simple(name), kind.clone());
+                self.add_scope_variable(QualifiedName::simple(name), kind.clone());
             }
             Parameter::Tuple(params) => {
                 for param in params {
                     self.add_parameter_to_symbol_table(param);
                 }
+            }
+        }
+    }
+
+    fn add_scope_variable(&mut self, name: QualifiedName, kind: Rc<TypeKind>) {
+        // SAFETY: scope_variables cannot be empty at this point
+        assert!(!self.scope_variables.is_empty());
+        self.scope_variables.last_mut().unwrap().push(name.clone());
+        self.symbol_table.insert(name, kind);
+    }
+
+    fn push_scope(&mut self) {
+        self.scope_variables.push(vec![]);
+    }
+
+    fn pop_scope(&mut self) {
+        if let Some(names) = self.scope_variables.pop() {
+            for name in names {
+                self.symbol_table.remove(&name);
             }
         }
     }
@@ -121,6 +140,12 @@ impl Mapper for Codegen {
         todo!()
     }
 
+    fn pre_scope(&mut self, _scope: &Scope) {
+        self.push_scope();
+    }
+    fn post_scope(&mut self, _scope: &Scope) {
+        self.pop_scope();
+    }
     fn map_scope(&mut self, statements: &[Self::Output]) -> Self::Output {
         quote! {
             {
@@ -141,6 +166,15 @@ impl Mapper for Codegen {
         todo!()
     }
 
+    fn post_let_statement(&mut self, binding: &SymbolBinding, expression: &Expression) {
+        if let SymbolBinding::Identifier(name) = binding {
+            if let Some(kind) = type_from_expression(expression, &self.symbol_table) {
+                self.add_scope_variable(QualifiedName::simple(name), kind);
+            }
+        } else {
+            // TODO
+        }
+    }
     fn map_let_statement(
         &mut self,
         binding: Self::Output,
@@ -182,6 +216,16 @@ impl Mapper for Codegen {
         unreachable!("visit_update_statement has been implemented directly")
     }
 
+    fn post_mutable_statement(&mut self, binding: &SymbolBinding, expression: &Expression) {
+        if let SymbolBinding::Identifier(name) = binding {
+            // TODO: raise a warning if type cannot be determined
+            if let Some(kind) = type_from_expression(expression, &self.symbol_table) {
+                self.add_scope_variable(QualifiedName::simple(name), kind);
+            }
+        } else {
+            // TODO
+        }
+    }
     fn map_mutable_statement(
         &mut self,
         binding: Self::Output,

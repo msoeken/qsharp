@@ -33,9 +33,11 @@ pub(crate) fn visit_callable(
     };
     let parameters = mapper.visit_parameter(callable.parameters());
 
+    // add new variable scope for parameters
+    mapper.push_scope();
     mapper.add_parameter_to_symbol_table(callable.parameters());
 
-    if let CallableBody::Multiple(specializations) = callable.body() {
+    let code = if let CallableBody::Multiple(specializations) = callable.body() {
         let mut code = quote! {};
 
         for specialization in specializations {
@@ -122,7 +124,12 @@ pub(crate) fn visit_callable(
         quote! {
             #modifier fn #name(#parameters) -> #return_type #body
         }
-    }
+    };
+
+    // pop parameter from scope
+    mapper.pop_scope();
+
+    code
 }
 
 fn generate_parameters_directly(

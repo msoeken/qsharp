@@ -61,6 +61,15 @@ fn test_array() {
                 }
                 return sum;
             }
+
+            function InternalSum() : Double {
+                let numbers = [1.0, 2.0, 3.0, 4.0];
+                mutable sum = 0.0;
+                for number in numbers {
+                    set sum += number;
+                }
+                return sum;
+            }
         }
     }
 
@@ -70,4 +79,5 @@ fn test_array() {
     assert!((Array::Function(&mut sim, 2) - 7.89).abs() < f64::EPSILON);
     assert_eq!(Array::Sum(&mut sim, Rc::new(vec![1, 2, 3, 4])), 10);
     assert_eq!(Array::RangeSum(&mut sim, 4), 10);
+    assert!((Array::InternalSum(&mut sim) - 10.0).abs() < f64::EPSILON);
 }

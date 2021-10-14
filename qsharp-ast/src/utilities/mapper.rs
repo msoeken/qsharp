@@ -121,12 +121,16 @@ pub trait Mapper {
         todo!();
     }
 
+    fn pre_scope(&mut self, _scope: &Scope) {}
+    fn post_scope(&mut self, _scope: &Scope) {}
     fn visit_scope(&mut self, scope: &Scope) -> Self::Output {
+        self.pre_scope(scope);
         let statements = scope
             .statements
             .iter()
             .map(|stmt| self.visit_statement(stmt))
             .collect_vec();
+        self.post_scope(scope);
         self.map_scope(&statements)
     }
     fn map_scope(&mut self, statements: &[Self::Output]) -> Self::Output;
@@ -176,20 +180,26 @@ pub trait Mapper {
     }
     fn map_return_statement(&mut self, expression: Self::Output) -> Self::Output;
     fn visit_fail_statement(&mut self, expression: &Expression) -> Self::Output;
+
+    fn pre_let_statement(&mut self, _binding: &SymbolBinding, _expression: &Expression) {}
+    fn post_let_statement(&mut self, _binding: &SymbolBinding, _expression: &Expression) {}
     fn visit_let_statement(
         &mut self,
         binding: &SymbolBinding,
         expression: &Expression,
     ) -> Self::Output {
-        let binding = self.visit_symbol_binding(binding);
-        let expression = self.visit_expression(expression);
-        self.map_let_statement(binding, expression)
+        self.pre_let_statement(binding, expression);
+        let binding_ = self.visit_symbol_binding(binding);
+        let expression_ = self.visit_expression(expression);
+        self.post_let_statement(binding, expression);
+        self.map_let_statement(binding_, expression_)
     }
     fn map_let_statement(
         &mut self,
         binding: Self::Output,
         expression: Self::Output,
     ) -> Self::Output;
+
     fn visit_set_statement(
         &mut self,
         binding: &SymbolBinding,
@@ -221,20 +231,26 @@ pub trait Mapper {
         operator: Self::Output,
         expression: Self::Output,
     ) -> Self::Output;
+
+    fn pre_mutable_statement(&mut self, _binding: &SymbolBinding, _expression: &Expression) {}
+    fn post_mutable_statement(&mut self, _binding: &SymbolBinding, _expression: &Expression) {}
     fn visit_mutable_statement(
         &mut self,
         binding: &SymbolBinding,
         expression: &Expression,
     ) -> Self::Output {
-        let binding = self.visit_symbol_binding(binding);
-        let expression = self.visit_expression(expression);
-        self.map_mutable_statement(binding, expression)
+        self.pre_mutable_statement(binding, expression);
+        let binding_ = self.visit_symbol_binding(binding);
+        let expression_ = self.visit_expression(expression);
+        self.post_mutable_statement(binding, expression);
+        self.map_mutable_statement(binding_, expression_)
     }
     fn map_mutable_statement(
         &mut self,
         binding: Self::Output,
         expression: Self::Output,
     ) -> Self::Output;
+
     fn visit_qubit_allocation(
         &mut self,
         kind: &QubitAllocationKind,
