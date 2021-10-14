@@ -1,6 +1,9 @@
 mod transformer;
 pub(crate) use transformer::Transformer;
 
+pub(crate) mod mapper;
+pub use mapper::Mapper;
+
 mod visitor;
 pub(crate) use visitor::VisitorMut;
 

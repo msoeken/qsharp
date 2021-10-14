@@ -66,7 +66,7 @@ pub mod ast {
     mod type_parameters;
     mod utilities;
 
-    pub use callable::{Callable, CallableBody};
+    pub use callable::{Callable, CallableBody, CallableKind};
     pub use characteristics::Characteristics;
     pub use declaration_prefix::{Access, DeclarationPrefix};
     pub use expression::{ArrayItemIndex, Expression, Pauli, ResultValue};
@@ -87,4 +87,4 @@ pub mod ast {
     pub use type_parameters::TypeParameters;
 }
 
-pub(crate) mod utilities;
+pub mod utilities;
