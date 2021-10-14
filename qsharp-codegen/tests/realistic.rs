@@ -1,6 +1,6 @@
-use qsharp_ast::ast::Program;
+use qsharp_ast::{ast::Program, utilities::Mapper};
 
-use qsharp_codegen::qsharp_to_rust;
+use qsharp_codegen::Codegen;
 use syn::Result;
 
 #[test]
@@ -41,7 +41,7 @@ fn test_and() -> Result<()> {
     let mut ast: Program = syn::parse_str(code)?;
     ast.normalize();
 
-    let _rust = qsharp_to_rust(&ast);
+    let _rust = Codegen::new().visit_program(&ast);
 
     println!("{}", _rust);
 
@@ -71,15 +71,9 @@ fn test_swap() -> Result<()> {
     let mut ast: Program = syn::parse_str(code)?;
     ast.normalize();
 
-    let _rust = qsharp_to_rust(&ast);
+    let _rust = Codegen::new().visit_program(&ast);
 
     println!("{}", _rust);
-
-    let _rust2 = qsharp_to_rust(&ast);
-
-    println!("{}", _rust2);
-
-    assert_eq!(_rust.to_string(), _rust2.to_string());
 
     Ok(())
 }
@@ -121,15 +115,9 @@ fn test_sum() -> Result<()> {
     let mut ast: Program = syn::parse_str(code)?;
     ast.normalize();
 
-    let _rust = qsharp_to_rust(&ast);
+    let _rust = Codegen::new().visit_program(&ast);
 
     println!("{}", _rust);
-
-    let _rust2 = qsharp_to_rust(&ast);
-
-    println!("{}", _rust2);
-
-    assert_eq!(_rust.to_string(), _rust2.to_string());
 
     Ok(())
 }
