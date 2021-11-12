@@ -16,7 +16,7 @@
 //! afterwards.
 //!
 //! ```
-//! use rflat_ast::ast::Program;
+//! use qsharp_ast::ast::Program;
 //!
 //! let mut program: Program = syn::parse_str("
 //!   namespace Sample {
