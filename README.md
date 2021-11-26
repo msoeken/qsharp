@@ -8,10 +8,38 @@ stable Q# compilers, see the following:
 
 ## Contents
 
-* [./qsharp](qsharp) • Procedural macros to insert Q# code into Rust code
-* [./qsharp-ast](qsharp-ast) • Q# parser from Rust token stream
-* [./qsharp-codegen](qsharp-codegen) • Rust code generation from Q# AST (*very preliminary*)
-* [./qsharp-runtime](qsharp-runtime) • Runtime intrinsics used by Rust code generation (*very preliminary*)
+* [qsharp](./qsharp) • Procedural macros to insert Q# code into Rust code
+* [qsharp-ast](./qsharp-ast) • Q# parser from Rust token stream
+* [qsharp-codegen](./qsharp-codegen) • Rust code generation from Q# AST (*very preliminary*)
+* [qsharp-runtime](./qsharp-runtime) • Runtime intrinsics used by Rust code generation (*very preliminary*)
+
+## Example
+
+This is a Rust file.
+
+```rust
+use qsharp::qsharp;
+use qsharp::runtime::*;
+
+qsharp! {
+
+namespace QsharpInRust {
+    use Microsoft.Quantum.Intrinsic;
+
+    operation Hello() : Unit {
+        Message("Hello from Rust!");
+    }
+}
+
+}
+
+fn main() {
+    // this can be a custom or pre-defined simulator
+    let mut sim = Simulator::new();
+
+    QsharpInRust::Hello(&mut sim);
+}
+```
 
 ## Build and test
 
