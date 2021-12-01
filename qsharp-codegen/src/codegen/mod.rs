@@ -87,6 +87,7 @@ impl Mapper for Codegen {
             #[allow(non_snake_case, unused_variables, dead_code, clippy::clone_on_copy, clippy::redundant_clone, clippy::unused_unit)]
             mod #name {
                 use crate::*;
+                use super::*;
                 use qsharp_runtime::*;
                 use Microsoft::Quantum::Core::*;
 
