@@ -8,7 +8,7 @@ use syn::{
 use crate::ast::{expression::parse_expression, kw, utilities::peek_and_consume, Expression};
 
 /// Access modifier in declaration prefix (e.g., `internal`)
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Access {
     Default,
     Internal,

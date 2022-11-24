@@ -11,7 +11,7 @@ use syn::{
 use crate::ast::{kw, utilities::peek_and_consume, Scope};
 
 /// Specialization parameter inside provided specialization generator
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SpecializationParameter {
     Identifier(String),
     Dots,
@@ -39,7 +39,7 @@ impl SpecializationGenerator {
 }
 
 /// One of the four specialization kinds (`body`, `adjoint`, `controlled`, `controlled adjoint`)
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
 pub enum SpecializationKind {
     Body,
     Adjoint,

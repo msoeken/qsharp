@@ -268,7 +268,7 @@ impl Parse for ArrayItemIndex {
 }
 
 /// A literal value to Q#'s `Pauli` type (`PauliI`, `PauliX`, `PauliY`, and `PauliZ`)
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pauli {
     PauliI,
     PauliX,
@@ -277,7 +277,7 @@ pub enum Pauli {
 }
 
 /// A literal value to Q#'s `Result` type (`Zero` and `One`)
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResultValue {
     Zero,
     One,

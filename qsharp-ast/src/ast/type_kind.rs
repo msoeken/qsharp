@@ -19,7 +19,7 @@ use crate::ast::{
 use super::utilities::peek_and_consume_single_quote;
 
 /// A type parameter that can be provided to generic expression (e.g., `'A`)
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct TypeParameter {
     name: String,
 }
