@@ -2,7 +2,7 @@ use syn::{parse::Parse, Result};
 
 // TODO ignore Q# keywords
 /// Q# identifier (incl. Q# keywords and excl. Rust keywords)
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Ident {
     value: String,
 }

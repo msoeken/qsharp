@@ -102,7 +102,7 @@ impl Parse for UpdateOperator {
 }
 
 /// Type of qubit allocation (`use` or `borrow`)
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum QubitAllocationKind {
     Use,
     Borrow,

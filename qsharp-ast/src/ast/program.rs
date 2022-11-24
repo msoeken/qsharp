@@ -10,6 +10,7 @@ use syn::{
 };
 
 /// A Q# program is a collection of Q# namespaces
+#[derive(Debug)]
 pub struct Program {
     pub(crate) namespaces: Vec<Namespace>,
 }

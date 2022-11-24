@@ -60,7 +60,7 @@ where
     PredicateFn: Fn(TokenTree) -> bool,
 {
     if let Some((into, _, _)) = input.cursor().group(proc_macro2::Delimiter::Parenthesis) {
-        into.token_stream().into_iter().any(|tree| predicate(tree))
+        into.token_stream().into_iter().any(predicate)
     } else {
         false
     }
